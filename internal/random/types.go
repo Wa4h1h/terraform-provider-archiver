@@ -1,7 +1,9 @@
 package random
 
+import "context"
+
 type Randomizer interface {
-	Generate(opt Options) ([]byte, error)
+	Generate(ctx context.Context, opt Options) ([]byte, error)
 }
 
 type Options struct {

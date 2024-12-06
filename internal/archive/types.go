@@ -1,14 +1,15 @@
 package archive
 
 import (
-	"io"
+	"context"
+	"os"
 
 	"github.com/Wa4h1h/terraform-provider-tools/internal/httpclient"
 )
 
 type Archiver interface {
-	ZipLocal(r io.Reader, dst string) ([]byte, error)
-	ZipRemote(remote string, dst string) ([]byte, error)
+	ZipLocal(src, dst string, flatter bool) (*os.File, error)
+	ZipRemote(ctx context.Context, remote string, dst string) (*os.File, error)
 }
 
 type Archive struct {
