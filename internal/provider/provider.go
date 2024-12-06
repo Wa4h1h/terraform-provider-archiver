@@ -239,30 +239,10 @@ func (t *ToolsProvider) Configure(ctx context.Context,
 
 func (t *ToolsProvider) DataSources(ctx context.Context,
 ) []func() datasource.DataSource {
-	return []func() datasource.DataSource{
-		NewD,
-	}
+	return []func() datasource.DataSource{}
 }
 
 func (t *ToolsProvider) Resources(ctx context.Context,
 ) []func() resource.Resource {
 	return []func() resource.Resource{}
-}
-
-var _ datasource.DataSource = &D{}
-
-type D struct{}
-
-func NewD() datasource.DataSource {
-	return &D{}
-}
-
-func (d *D) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
-	response.TypeName = request.ProviderTypeName + "_get"
-}
-
-func (d *D) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
-}
-
-func (d *D) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 }
