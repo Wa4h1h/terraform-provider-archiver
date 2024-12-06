@@ -2,23 +2,26 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"math/big"
+
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/Wa4h1h/terraform-provider-tools/internal/archive"
 	"github.com/Wa4h1h/terraform-provider-tools/internal/httpclient"
 	"github.com/Wa4h1h/terraform-provider-tools/internal/random"
 	"github.com/Wa4h1h/terraform-provider-tools/internal/template"
-	"github.com/hashicorp/terraform-plugin-framework/path"
-
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // make sure we conform to Provider
-var _ provider.Provider = &ToolsProvider{}
+var _ provider.ProviderWithValidateConfig = &ToolsProvider{}
 
 type Tools struct {
 	archive.Archiver
@@ -27,17 +30,15 @@ type Tools struct {
 	template.TemplateRunner
 }
 
-func NewTools() *Tools {
+func NewTools(httpRunner httpclient.HTTPRunner,
+	archiverOpts ...archive.ArchiverOpt,
+) *Tools {
 	return &Tools{
-		archive.NewArchiver(),
-		httpclient.NewHTTPRunner(),
-		random.NewRandomizer(),
-		template.NewTemplateRunner(),
+		Archiver:       archive.NewArchiver(archiverOpts...),
+		HTTPRunner:     httpRunner,
+		Randomizer:     random.NewRandomizer(),
+		TemplateRunner: template.NewTemplateRunner(),
 	}
-}
-
-type ToolsProviderModel struct {
-	http types.Object `tfsdk:"http"`
 }
 
 type ToolsProvider struct {
@@ -56,7 +57,7 @@ func (t *ToolsProvider) Metadata(ctx context.Context,
 	req provider.MetadataRequest,
 	resp *provider.MetadataResponse,
 ) {
-	resp.TypeName = "tool"
+	resp.TypeName = "tools"
 	resp.Version = t.version
 }
 
@@ -66,35 +67,50 @@ func (t *ToolsProvider) Schema(_ context.Context,
 ) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"http": schema.ObjectAttribute{
-				Optional:  true,
-				Sensitive: true,
-				AttributeTypes: map[string]attr.Type{
-					"access_token_url": types.StringType,
-					"client_id":        types.StringType,
-					"client_secret":    types.StringType,
-					"scope":            types.StringType,
-					"grant_type":       types.StringType,
+			"http": schema.SingleNestedAttribute{
+				Optional: true,
+				Attributes: map[string]schema.Attribute{
+					"headers": schema.MapAttribute{
+						Optional:    true,
+						ElementType: types.StringType,
+					},
+					"hostname": schema.StringAttribute{
+						Optional: true,
+					},
+					"timeout": schema.Int32Attribute{
+						Optional: true,
+					},
 				},
 			},
 		},
 	}
 }
 
-func (t *ToolsProvider) Configure(ctx context.Context,
-	req provider.ConfigureRequest,
-	resp *provider.ConfigureResponse,
+type ToolsProviderModel struct {
+	Http types.Object `tfsdk:"http"`
+}
+
+func (t *ToolsProvider) ValidateConfig(ctx context.Context,
+	req provider.ValidateConfigRequest,
+	resp *provider.ValidateConfigResponse,
 ) {
+	tflog.Info(ctx, "Validation Tools configuration")
+
 	// load provider config
 	var data ToolsProviderModel
 
 	d := req.Config.Get(ctx, &data)
 	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	httpPath := path.Root("http")
 
 	// assert if http config object value is known by the time the provider is being initialized
-	if data.http.IsUnknown() {
+	if data.Http.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
-			path.Root("http"),
+			httpPath,
 			"Unknown http config",
 			"The provider cannot create http client",
 		)
@@ -104,8 +120,118 @@ func (t *ToolsProvider) Configure(ctx context.Context,
 		return
 	}
 
-	// init API
-	tools := NewTools()
+	httpTimeoutAttr, ok := data.Http.Attributes()["timeout"]
+	if ok {
+		if httpTimeoutAttr.IsUnknown() {
+			resp.Diagnostics.AddAttributeError(
+				httpPath.AtMapKey("timeout"),
+				"Unknown http timeout",
+				"The provider cannot create http client",
+			)
+		}
+	}
+
+	httpHeadersAttr, ok := data.Http.Attributes()["headers"]
+	if ok {
+		if httpHeadersAttr.IsUnknown() {
+			resp.Diagnostics.AddAttributeError(
+				httpPath.AtMapKey("headers"),
+				"Unknown http headers",
+				"The provider cannot create http client",
+			)
+		}
+	}
+
+	httpHostname, ok := data.Http.Attributes()["hostname"]
+	if ok {
+		if httpHostname.IsUnknown() {
+			resp.Diagnostics.AddAttributeError(
+				httpPath.AtMapKey("hostname"),
+				"Unknown http hostname",
+				"The provider cannot create http client",
+			)
+		}
+	}
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+
+func (t *ToolsProvider) Configure(ctx context.Context,
+	req provider.ConfigureRequest,
+	resp *provider.ConfigureResponse,
+) {
+	tflog.Info(ctx, "Configuring Tools client")
+
+	// load provider config
+	var (
+		data      ToolsProviderModel
+		tfHeaders map[string]tftypes.Value
+		tfTimeout big.Float
+		hostname  string
+	)
+
+	d := req.Config.Get(ctx, &data)
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	httpAttrs := data.Http.Attributes()
+
+	headersVal, ok := httpAttrs["headers"]
+	if ok {
+		tfVal, err := headersVal.ToTerraformValue(ctx)
+		if err == nil {
+			err = tfVal.As(&tfHeaders)
+			if err != nil {
+				d.AddAttributeWarning(path.Root("http").AtMapKey("headers"),
+					"Fail to get headers",
+					fmt.Sprintf("The provider can not populate default headers: %s", err))
+			}
+		}
+
+		d.AddAttributeWarning(path.Root("http").AtMapKey("headers"),
+			"Fail to get headers",
+			fmt.Sprintf("The provider can not populate default headers: %s", err))
+	}
+
+	timeoutVal, ok := httpAttrs["timeout"]
+	if ok {
+		tfVal, err := timeoutVal.ToTerraformValue(ctx)
+		if err == nil {
+			err = tfVal.As(&tfTimeout)
+			if err != nil {
+				d.AddAttributeWarning(path.Root("http").AtMapKey("timeout"),
+					"Fail to get timeout",
+					fmt.Sprintf("The provider can not populate default timeout: %s", err))
+			}
+		}
+
+		d.AddAttributeWarning(path.Root("http").AtMapKey("timeout"),
+			"Fail to get timeout",
+			fmt.Sprintf("The provider can not populate default timeout: %s", err))
+	}
+
+	hostnameVal, ok := httpAttrs["hostname"]
+	if ok {
+		hostname = hostnameVal.String()
+	}
+
+	headers := make(map[string]string)
+	for key, val := range tfHeaders {
+		headers[key] = val.String()
+	}
+
+	var timeout big.Int
+
+	tm, _ := tfTimeout.Int(&timeout)
+
+	httpRunner := httpclient.NewHTTPRunner(httpclient.WithTimeout(int(tm.Int64())),
+		httpclient.WithHostname(hostname), httpclient.WithHeaders(headers))
+
+	tools := NewTools(httpRunner, archive.WithHTTPRunner(httpRunner))
 
 	resp.DataSourceData = tools
 	resp.ResourceData = tools
@@ -113,10 +239,30 @@ func (t *ToolsProvider) Configure(ctx context.Context,
 
 func (t *ToolsProvider) DataSources(ctx context.Context,
 ) []func() datasource.DataSource {
-	return nil
+	return []func() datasource.DataSource{
+		NewD,
+	}
 }
 
 func (t *ToolsProvider) Resources(ctx context.Context,
 ) []func() resource.Resource {
-	return nil
+	return []func() resource.Resource{}
+}
+
+var _ datasource.DataSource = &D{}
+
+type D struct{}
+
+func NewD() datasource.DataSource {
+	return &D{}
+}
+
+func (d *D) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_get"
+}
+
+func (d *D) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+}
+
+func (d *D) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 }

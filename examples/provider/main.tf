@@ -9,10 +9,11 @@ terraform {
 // http object is optional
 provider "tools" {
   http = {
-    access_token_url = "https://authorization-server.com/token"
-    client_id        = "client-id"
-    client_secret    = "client-secret"
-    scope            = "scope"
-    grant_type       = "grant-type"
+    hostname="hostname"
+    headers={
+      "Content-Type"="application/json"
+    }
+    // in seconds
+    timeout=1
   }
 }

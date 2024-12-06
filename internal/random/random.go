@@ -3,10 +3,10 @@ package random
 // make sure we conform to Randomizer
 var _ Randomizer = &Random{}
 
-type Randomizer interface{}
-
-type Random struct{}
-
 func NewRandomizer() Randomizer {
 	return &Random{}
+}
+
+func (r *Random) Generate(opt Options) ([]byte, error) {
+	return nil, nil
 }

@@ -1,12 +1,51 @@
 package httpclient
 
+import (
+	"context"
+	"io"
+	"net/http"
+	"time"
+)
+
 // make sure we conform to HTTPRunner
-var _ HTTPRunner = &Client{}
+var _ HTTPRunner = &client{}
 
-type HTTPRunner interface{}
+func NewHTTPRunner(opts ...HTTPClientOpt) HTTPRunner {
+	c := new(client)
 
-type Client struct{}
+	for _, opt := range opts {
+		opt(c)
+	}
 
-func NewHTTPRunner() HTTPRunner {
-	return &Client{}
+	c.httpClient = new(http.Client)
+
+	if c.timeout == nil {
+		WithTimeout(DefaultTimeout)(c)
+	}
+
+	return c
+}
+
+func WithTimeout(timeout int) HTTPClientOpt {
+	return func(c *client) {
+		secDuration := time.Duration(timeout) * time.Second
+		c.timeout = &secDuration
+	}
+}
+
+func WithHeaders(headers HTTPHeaders) HTTPClientOpt {
+	return func(c *client) {
+		c.headers = headers
+	}
+}
+
+func WithHostname(hostname string) HTTPClientOpt {
+	return func(c *client) {
+		c.hostname = hostname
+	}
+}
+
+func (c *client) Do(ctx context.Context, params *RequestParams,
+) (io.ReadCloser, error) {
+	return nil, nil
 }

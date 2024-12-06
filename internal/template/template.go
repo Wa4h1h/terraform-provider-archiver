@@ -1,12 +1,17 @@
 package template
 
+import (
+	"context"
+	"io"
+)
+
 // make sure we conform to TemplateRunner
 var _ TemplateRunner = &Template{}
 
-type TemplateRunner interface{}
-
-type Template struct{}
-
-func NewTemplateRunner() *Template {
+func NewTemplateRunner() TemplateRunner {
 	return &Template{}
+}
+
+func (t *Template) Run(ctx context.Context, w io.Writer, data any) error {
+	return nil
 }
