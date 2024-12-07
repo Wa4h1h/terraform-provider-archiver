@@ -2,33 +2,18 @@ package archive
 
 import (
 	"archive/zip"
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
-
-	"github.com/Wa4h1h/terraform-provider-tools/internal/httpclient"
 )
 
 // make sure we conform to Archiver
 var _ Archiver = &Archive{}
 
-func NewArchiver(opts ...ArchiverOpt) Archiver {
-	a := new(Archive)
-
-	for _, opt := range opts {
-		opt(a)
-	}
-
-	return a
-}
-
-func WithHTTPRunner(httpRunner httpclient.HTTPRunner) ArchiverOpt {
-	return func(archive *Archive) {
-		archive.HTTPRunner = httpRunner
-	}
+func NewArchiver() Archiver {
+	return &Archive{}
 }
 
 func (a *Archive) writeToZip(w *zip.Writer, src string, flatten bool) error {
@@ -68,25 +53,27 @@ func (a *Archive) walkPath(w *zip.Writer, src string, flatten bool) error {
 
 	if !info.IsDir() {
 		return a.writeToZip(w, src, flatten)
-	} else {
-		entries, err := os.ReadDir(src)
-		if err != nil {
-			return fmt.Errorf("error ZipLocal: read src dir %s: %w", src, err)
-		}
+	}
 
-		for _, val := range entries {
-			if val.IsDir() {
-				if err := a.walkPath(w, fmt.Sprintf("%s/%s", src, val.Name()), flatten); err != nil {
-					slog.Error(err.Error())
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return fmt.Errorf("error ZipLocal: read src dir %s: %w", src, err)
+	}
 
-					continue
-				}
-			} else {
-				if err := a.writeToZip(w, fmt.Sprintf("%s/%s", src, val.Name()), flatten); err != nil {
-					slog.Error(err.Error())
+	for _, val := range entries {
+		tmpSrc := fmt.Sprintf("%s/%s", src, val.Name())
 
-					continue
-				}
+		if val.IsDir() {
+			if err := a.walkPath(w, tmpSrc, flatten); err != nil {
+				slog.Error(err.Error())
+
+				continue
+			}
+		} else {
+			if err := a.writeToZip(w, tmpSrc, flatten); err != nil {
+				slog.Error(err.Error())
+
+				continue
 			}
 		}
 	}
@@ -114,8 +101,4 @@ func (a *Archive) ZipLocal(src, dst string, flatten bool) (*os.File, error) {
 	}
 
 	return f, nil
-}
-
-func (a *Archive) ZipRemote(ctx context.Context, remote, dst string) (*os.File, error) {
-	return nil, nil
 }

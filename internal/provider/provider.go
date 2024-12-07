@@ -30,11 +30,9 @@ type Tools struct {
 	template.TemplateRunner
 }
 
-func NewTools(httpRunner httpclient.HTTPRunner,
-	archiverOpts ...archive.ArchiverOpt,
-) *Tools {
+func NewTools(httpRunner httpclient.HTTPRunner) *Tools {
 	return &Tools{
-		Archiver:       archive.NewArchiver(archiverOpts...),
+		Archiver:       archive.NewArchiver(),
 		HTTPRunner:     httpRunner,
 		Randomizer:     random.NewRandomizer(),
 		TemplateRunner: template.NewTemplateRunner(),
@@ -231,7 +229,7 @@ func (t *ToolsProvider) Configure(ctx context.Context,
 	httpRunner := httpclient.NewHTTPRunner(httpclient.WithTimeout(int(tm.Int64())),
 		httpclient.WithHostname(hostname), httpclient.WithHeaders(headers))
 
-	tools := NewTools(httpRunner, archive.WithHTTPRunner(httpRunner))
+	tools := NewTools(httpRunner)
 
 	resp.DataSourceData = tools
 	resp.ResourceData = tools
