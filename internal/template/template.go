@@ -2,7 +2,6 @@ package template
 
 import (
 	"context"
-	"io"
 )
 
 // make sure we conform to TemplateRunner
@@ -12,6 +11,6 @@ func NewTemplateRunner() TemplateRunner {
 	return &Template{}
 }
 
-func (t *Template) Run(ctx context.Context, w io.Writer, data any) error {
+func (t *Template) Run(ctx context.Context, src string, data any) error {
 	return nil
 }

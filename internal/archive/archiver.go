@@ -33,12 +33,7 @@ func (a *Archive) writeToZip(w *zip.Writer, src string, flatten bool) error {
 		return fmt.Errorf("error ZipLocal: open zip file %s: %w", src, err)
 	}
 
-	b, err := io.ReadAll(fr)
-	if err != nil {
-		return fmt.Errorf("error ZipLocal: read zip file %s: %w", src, err)
-	}
-
-	if _, err := fw.Write(b); err != nil {
+	if _, err := io.Copy(fw, fr); err != nil {
 		return fmt.Errorf("error ZipLocal: write to zip file %s: %w", src, err)
 	}
 
