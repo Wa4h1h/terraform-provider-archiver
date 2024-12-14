@@ -118,7 +118,7 @@ func (z *ZipArchive) ArchiveDir(src string, flatten bool) error {
 		tmpPath := fmt.Sprintf("%s/%s", src, entry.Name())
 
 		if !entry.IsDir() {
-			if err := z.writeToZip(tmpPath, flatten); err != nil {
+			if err := z.ArchiveFile(tmpPath, flatten); err != nil {
 				log.Printf("error ArchiveDir: write to zip %s: %s", tmpPath, err)
 			}
 		} else {
