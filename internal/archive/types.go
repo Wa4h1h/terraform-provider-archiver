@@ -1,15 +1,57 @@
 package archive
 
 import (
+	"archive/zip"
 	"os"
-
-	"github.com/Wa4h1h/terraform-provider-tools/internal/httpclient"
 )
 
-type Archiver interface {
-	ZipLocal(src, dst string, flatter bool) (*os.File, error)
+// zip content
+// zip one file
+// zip list of files
+// zip directory
+// zip list of directories
+
+// options:
+// exclude/resolve symlink
+// exclude list of files,dirs
+// output file mode
+// flatten
+
+type ArchiverType string
+
+const (
+	Zip ArchiverType = "zip"
+	Tar ArchiverType = "tar"
+)
+
+type ArchiverResult struct {
+	Sha256 string
+	MD5    string
+	Size   int64
 }
 
-type Archive struct {
-	httpclient.HTTPRunner
+type ArchiveSettings struct {
+	// files/dirs to exclude during archiving
+	ExcludeList []string
+	// octal file mode of the created archive
+	FileMode os.FileMode
+	// ignore symbolic links
+	SymLink bool
 }
+
+type Archiver interface {
+	ArchiveFile(src string, flatten bool) error
+	ArchiveDir(src string, flatten bool) error
+	ArchiveContent(src []byte, dst string) error
+	Open(zipName string, archiveSettings *ArchiveSettings) error
+	Close() error
+}
+
+type ZipArchive struct {
+	zipFile   *os.File
+	zipWriter *zip.Writer
+	settings  *ArchiveSettings
+	fileName  string
+}
+
+type TarArchiver struct{}
