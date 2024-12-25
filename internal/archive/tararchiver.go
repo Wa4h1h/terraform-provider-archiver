@@ -119,7 +119,7 @@ func (t *TarArchiver) ArchiveContent(src []byte, dst string) error {
 	err := t.tarWriter.WriteHeader(&tar.Header{
 		Name:     dst,
 		Size:     int64(len(src)),
-		Mode:     770,
+		Mode:     666,
 		ModTime:  time.Now(),
 		Typeflag: tar.TypeReg,
 	})

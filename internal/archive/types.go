@@ -7,18 +7,6 @@ import (
 	"os"
 )
 
-// zip content
-// zip one file
-// zip list of files
-// zip directory
-// zip list of directories
-
-// options:
-// exclude/resolve symlink
-// exclude list of files,dirs
-// output file mode
-// flatten
-
 type ArchiverType string
 
 const (
