@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -27,7 +28,7 @@ func (z *ZipArchive) writeToZip(src, dst string) error {
 	}
 
 	if _, err := io.Copy(w, f); err != nil {
-		return fmt.Errorf("error ArchiveFile: write to zip: %w", err)
+		return fmt.Errorf("error writeToZip: write to zip: %w", err)
 	}
 
 	return nil
@@ -38,6 +39,10 @@ func (z *ZipArchive) writeToZip(src, dst string) error {
 // call writeToZip, to write src content to dst.
 func (z *ZipArchive) ArchiveFile(src, dst string) error {
 	var err error
+
+	if slices.Contains(z.settings.ExcludeList, src) {
+		return nil
+	}
 
 	if z.settings.SymLink {
 		src, err = evaluateSymLink(src)
@@ -105,12 +110,6 @@ func (z *ZipArchive) ArchiveContent(src []byte, dst string) error {
 			dst, err)
 	}
 
-	defer func() {
-		if err := os.Remove(dst); err != nil {
-			log.Printf("error ArchiveContent: remove %s: %s", dst, err)
-		}
-	}()
-
 	if _, err := w.Write(src); err != nil {
 		return fmt.Errorf("error ArchiveContent: write to zip: %w", err)
 	}
@@ -128,6 +127,23 @@ func (z *ZipArchive) Open(zipName string, archiveSettings *ArchiveSettings) erro
 	z.fileName = zipName
 	z.zipWriter = zip.NewWriter(f)
 	z.settings = archiveSettings
+
+	if z.settings != nil {
+		if z.settings.ExcludeList != nil {
+			newExcludeList := make([]string, 0, len(z.settings.ExcludeList))
+
+			for _, excludePath := range z.settings.ExcludeList {
+				excludePath, err = filepath.Abs(excludePath)
+				if err != nil {
+					return fmt.Errorf("error Open: set abs path for %s: %w", excludePath, err)
+				}
+
+				newExcludeList = append(newExcludeList, excludePath)
+			}
+
+			z.settings.ExcludeList = newExcludeList
+		}
+	}
 
 	return nil
 }
