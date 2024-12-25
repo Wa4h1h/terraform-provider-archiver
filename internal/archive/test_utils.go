@@ -10,10 +10,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
-	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func getZipContentFullPaths(src string) ([]string, error) {
@@ -80,65 +76,4 @@ func getFilePathFromDir(src string) ([]string, error) {
 	}
 
 	return files, nil
-}
-
-var fileTestCases = []struct {
-	name    string
-	routine func(*testing.T) (string, string)
-}{
-	{
-		name: "SrcAbsDstRel_CreateArchive",
-		routine: func(t *testing.T) (string, string) {
-			relPath := "../../internal/random/types.go"
-
-			path, err := filepath.Abs(relPath)
-
-			require.Nil(t, err)
-
-			for strings.HasPrefix(relPath, "../") {
-				relPath = strings.TrimPrefix(relPath, "../")
-			}
-
-			return path, relPath
-		},
-	},
-	{
-		name: "SrcAbsDstAbs_CreateArchive",
-		routine: func(t *testing.T) (string, string) {
-			var err error
-			path := "../../internal/random/types.go"
-
-			path, err = filepath.Abs(path)
-
-			require.Nil(t, err)
-
-			return path, path
-		},
-	},
-	{
-		name: "SrcAbsSymLinkDstRel_CreateArchive",
-		routine: func(t *testing.T) (string, string) {
-			relPath := "../../internal/random/types.go"
-
-			path, err := filepath.Abs(relPath)
-
-			require.Nil(t, err)
-
-			for strings.HasPrefix(relPath, "../") {
-				relPath = strings.TrimPrefix(relPath, "../")
-			}
-
-			symLink := "symlink-path"
-
-			err = os.Symlink(path, symLink)
-
-			require.Nil(t, err)
-
-			path, err = filepath.Abs(symLink)
-
-			require.Nil(t, err)
-
-			return path, relPath
-		},
-	},
 }

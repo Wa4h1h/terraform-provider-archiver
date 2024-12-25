@@ -72,6 +72,8 @@ func evaluateSymLink(link string) (string, error) {
 	return absPath, nil
 }
 
+// resolveExcludeList takes a list of absolute/relative paths
+// returns a list of absolute paths
 func resolveExcludeList(list []string) ([]string, error) {
 	newExcludeList := make([]string, 0, len(list))
 

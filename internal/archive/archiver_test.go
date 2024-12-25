@@ -103,6 +103,67 @@ var bytesTestCases = []struct {
 	},
 }
 
+var fileTestCases = []struct {
+	name    string
+	routine func(*testing.T) (string, string)
+}{
+	{
+		name: "SrcAbsDstRel_CreateArchive",
+		routine: func(t *testing.T) (string, string) {
+			relPath := "../../internal/random/types.go"
+
+			path, err := filepath.Abs(relPath)
+
+			require.Nil(t, err)
+
+			for strings.HasPrefix(relPath, "../") {
+				relPath = strings.TrimPrefix(relPath, "../")
+			}
+
+			return path, relPath
+		},
+	},
+	{
+		name: "SrcAbsDstAbs_CreateArchive",
+		routine: func(t *testing.T) (string, string) {
+			var err error
+			path := "../../internal/random/types.go"
+
+			path, err = filepath.Abs(path)
+
+			require.Nil(t, err)
+
+			return path, path
+		},
+	},
+	{
+		name: "SrcAbsSymLinkDstRel_CreateArchive",
+		routine: func(t *testing.T) (string, string) {
+			relPath := "../../internal/random/types.go"
+
+			path, err := filepath.Abs(relPath)
+
+			require.Nil(t, err)
+
+			for strings.HasPrefix(relPath, "../") {
+				relPath = strings.TrimPrefix(relPath, "../")
+			}
+
+			symLink := "symlink-path"
+
+			err = os.Symlink(path, symLink)
+
+			require.Nil(t, err)
+
+			path, err = filepath.Abs(symLink)
+
+			require.Nil(t, err)
+
+			return path, relPath
+		},
+	},
+}
+
 func TestZipArchive_ArchiveFile(t *testing.T) {
 	for _, testCase := range fileTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
