@@ -1,25 +1,29 @@
 package archive
 
 import (
-	"archive/zip"
 	"crypto/md5"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // make sure we conform to Archiver
 var (
 	_ Archiver = &ZipArchive{}
+	_ Archiver = &TarArchiver{}
 )
 
 func NewArchiver(archType ArchiverType) Archiver {
-	return &ZipArchive{}
+	switch archType {
+	case Zip:
+		return &ZipArchive{}
+	case Tar:
+		return &TarArchiver{}
+	default:
+		panic("must not happen: wrong archiver type")
+	}
 }
 
 // evaluateSymLink takes in an absolute path link
@@ -48,129 +52,6 @@ func evaluateSymLink(link string) (string, error) {
 	}
 
 	return absPath, nil
-}
-
-func (z *ZipArchive) writeToZip(file string, flatten bool) error {
-	f, err := os.Open(file)
-	if err != nil {
-		return fmt.Errorf("error writeToZip: open %s: %w", file, err)
-	}
-
-	defer f.Close()
-
-	// check flatten
-	if flatten {
-		file = file[strings.LastIndex(file, "/")+1:]
-	}
-
-	w, err := z.zipWriter.Create(file)
-	if err != nil {
-		return fmt.Errorf("error writeToZip: create %s writer: %w", file, err)
-	}
-
-	if _, err := io.Copy(w, f); err != nil {
-		return fmt.Errorf("error ArchiveFile: write to zip: %w", err)
-	}
-
-	return nil
-}
-
-func (z *ZipArchive) ArchiveFile(file string, flatten bool,
-) error {
-	var (
-		path = file
-		err  error
-	)
-
-	if z.settings.SymLink {
-		path, err = evaluateSymLink(file)
-		if err != nil {
-			return err
-		}
-	}
-
-	if err := z.writeToZip(path, flatten); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (z *ZipArchive) ArchiveDir(src string, flatten bool) error {
-	var (
-		path = src
-		err  error
-	)
-
-	if z.settings.SymLink {
-		path, err = evaluateSymLink(src)
-		if err != nil {
-			return err
-		}
-	}
-
-	entries, err := os.ReadDir(path)
-	if err != nil {
-		return fmt.Errorf("error ArchiveDir: read dirs under %s: %w", path, err)
-	}
-
-	for _, entry := range entries {
-		tmpPath := fmt.Sprintf("%s/%s", src, entry.Name())
-
-		if !entry.IsDir() {
-			if err := z.ArchiveFile(tmpPath, flatten); err != nil {
-				log.Printf("error ArchiveDir: write to zip %s: %s", tmpPath, err)
-			}
-		} else {
-			if err := z.ArchiveDir(tmpPath, flatten); err != nil {
-				log.Printf("error ArchiveDir: write to zip %s: %s", tmpPath, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (z *ZipArchive) ArchiveContent(src []byte, dst string) error {
-	w, err := z.zipWriter.Create(dst)
-	if err != nil {
-		return fmt.Errorf("error ArchiveContent: append file %s to zip: %w",
-			dst, err)
-	}
-
-	if _, err := w.Write(src); err != nil {
-		return fmt.Errorf("error ArchiveContent: write to zip: %w", err)
-	}
-
-	return nil
-}
-
-func (z *ZipArchive) Open(zipName string, archiveSettings *ArchiveSettings) error {
-	f, err := os.OpenFile(zipName, os.O_TRUNC|os.O_CREATE|os.O_RDWR, archiveSettings.FileMode)
-	if err != nil {
-		return fmt.Errorf("error: Create zip file %s: %w", zipName, err)
-	}
-
-	z.zipFile = f
-	z.fileName = zipName
-	z.zipWriter = zip.NewWriter(f)
-	z.settings = archiveSettings
-
-	return nil
-}
-
-func (z *ZipArchive) Close() error {
-	var err error
-
-	if err = z.zipWriter.Close(); err != nil {
-		err = errors.Join(fmt.Errorf("error Close: zip %s: %w", z.fileName, err))
-	}
-
-	if err = z.zipFile.Close(); err != nil {
-		err = errors.Join(fmt.Errorf("error Close: zip writer: %w", err))
-	}
-
-	return err
 }
 
 func MD5(f *os.File) (string, error) {

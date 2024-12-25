@@ -35,13 +35,13 @@ type ArchiveSettings struct {
 	ExcludeList []string
 	// octal file mode of the created archive
 	FileMode os.FileMode
-	// ignore symbolic links
+	// include symbolic links
 	SymLink bool
 }
 
 type Archiver interface {
-	ArchiveFile(src string, flatten bool) error
-	ArchiveDir(src string, flatten bool) error
+	ArchiveFile(src, dst string) error
+	ArchiveDir(src, dst string) error
 	ArchiveContent(src []byte, dst string) error
 	Open(zipName string, archiveSettings *ArchiveSettings) error
 	Close() error
