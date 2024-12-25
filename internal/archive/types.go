@@ -1,7 +1,9 @@
 package archive
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"os"
 )
 
@@ -39,11 +41,13 @@ type ArchiveSettings struct {
 	SymLink bool
 }
 
+type Options func(*ArchiveSettings)
+
 type Archiver interface {
 	ArchiveFile(src, dst string) error
 	ArchiveDir(src, dst string) error
 	ArchiveContent(src []byte, dst string) error
-	Open(zipName string, archiveSettings *ArchiveSettings) error
+	Open(zipName string, opts ...Options) error
 	Close() error
 }
 
@@ -54,4 +58,10 @@ type ZipArchive struct {
 	fileName  string
 }
 
-type TarArchiver struct{}
+type TarArchiver struct {
+	tarFile    *os.File
+	gzipWriter *gzip.Writer
+	tarWriter  *tar.Writer
+	settings   *ArchiveSettings
+	fileName   string
+}

@@ -26,6 +26,24 @@ func NewArchiver(archType ArchiverType) Archiver {
 	}
 }
 
+func WithExcludeList(list []string) Options {
+	return func(settings *ArchiveSettings) {
+		settings.ExcludeList = list
+	}
+}
+
+func WithFileMode(mod os.FileMode) Options {
+	return func(settings *ArchiveSettings) {
+		settings.FileMode = mod
+	}
+}
+
+func WithSymLink(link bool) Options {
+	return func(settings *ArchiveSettings) {
+		settings.SymLink = link
+	}
+}
+
 // evaluateSymLink takes in an absolute path link
 // evaluates the symbolic link and returns the underlying absolute path
 func evaluateSymLink(link string) (string, error) {
@@ -52,6 +70,21 @@ func evaluateSymLink(link string) (string, error) {
 	}
 
 	return absPath, nil
+}
+
+func resolveExcludeList(list []string) ([]string, error) {
+	newExcludeList := make([]string, 0, len(list))
+
+	for _, excludePath := range list {
+		excludePath, err := filepath.Abs(excludePath)
+		if err != nil {
+			return nil, fmt.Errorf("error Open: set abs path for %s: %w", excludePath, err)
+		}
+
+		newExcludeList = append(newExcludeList, excludePath)
+	}
+
+	return newExcludeList, nil
 }
 
 func MD5(f *os.File) (string, error) {

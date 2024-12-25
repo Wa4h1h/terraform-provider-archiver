@@ -117,7 +117,15 @@ func (z *ZipArchive) ArchiveContent(src []byte, dst string) error {
 	return nil
 }
 
-func (z *ZipArchive) Open(zipName string, archiveSettings *ArchiveSettings) error {
+func (z *ZipArchive) Open(zipName string, opts ...Options) error {
+	archiveSettings := &ArchiveSettings{
+		FileMode: DefaultArchiveMode,
+	}
+
+	for _, opt := range opts {
+		opt(archiveSettings)
+	}
+
 	f, err := os.OpenFile(zipName, os.O_TRUNC|os.O_CREATE|os.O_RDWR, archiveSettings.FileMode)
 	if err != nil {
 		return fmt.Errorf("error: Create zip file %s: %w", zipName, err)
@@ -128,20 +136,10 @@ func (z *ZipArchive) Open(zipName string, archiveSettings *ArchiveSettings) erro
 	z.zipWriter = zip.NewWriter(f)
 	z.settings = archiveSettings
 
-	if z.settings != nil {
-		if z.settings.ExcludeList != nil {
-			newExcludeList := make([]string, 0, len(z.settings.ExcludeList))
-
-			for _, excludePath := range z.settings.ExcludeList {
-				excludePath, err = filepath.Abs(excludePath)
-				if err != nil {
-					return fmt.Errorf("error Open: set abs path for %s: %w", excludePath, err)
-				}
-
-				newExcludeList = append(newExcludeList, excludePath)
-			}
-
-			z.settings.ExcludeList = newExcludeList
+	if z.settings.ExcludeList != nil {
+		z.settings.ExcludeList, err = resolveExcludeList(z.settings.ExcludeList)
+		if err != nil {
+			return err
 		}
 	}
 
