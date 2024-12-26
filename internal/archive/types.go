@@ -7,13 +7,6 @@ import (
 	"os"
 )
 
-type ArchiverType string
-
-const (
-	Zip ArchiverType = "zip"
-	Tar ArchiverType = "tar"
-)
-
 type ArchiverResult struct {
 	Sha256 string
 	MD5    string
@@ -39,7 +32,7 @@ type Archiver interface {
 	Close() error
 }
 
-type ZipArchive struct {
+type ZipArchiver struct {
 	zipFile   *os.File
 	zipWriter *zip.Writer
 	settings  *ArchiveSettings
@@ -52,4 +45,9 @@ type TarArchiver struct {
 	tarWriter  *tar.Writer
 	settings   *ArchiveSettings
 	fileName   string
+}
+
+var archivers = map[string]Archiver{
+	"zip":    &ZipArchiver{},
+	"tar.gz": &TarArchiver{},
 }

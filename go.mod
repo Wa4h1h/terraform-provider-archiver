@@ -1,4 +1,4 @@
-module github.com/Wa4h1h/terraform-provider-tools
+module github.com/Wa4h1h/terraform-provider-archiver
 
 go 1.22.7
 

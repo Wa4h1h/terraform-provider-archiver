@@ -15,7 +15,7 @@ import (
 )
 
 // writeToTar create a new file dst inside the tarball
-// copies src content to the newly created dst file
+// copies src content to the newly created dst file.
 func (t *TarArchiver) writeToTar(src, dst string) error {
 	f, err := os.Open(src)
 	if err != nil {

@@ -172,7 +172,7 @@ func TestZipArchive_ArchiveFile(t *testing.T) {
 				os.Remove("symlink-path")
 			})
 
-			a := NewArchiver(Zip)
+			a := GetArchiver("zip")
 
 			src, dst := testCase.routine(t)
 
@@ -204,7 +204,7 @@ func TestZipArchive_ArchiveDir(t *testing.T) {
 				os.Remove("symlink-path")
 			})
 
-			a := NewArchiver(Zip)
+			a := GetArchiver("zip")
 
 			src, dst := testCase.routine(t)
 
@@ -246,7 +246,7 @@ func TestZipArchive_ArchiveContent(t *testing.T) {
 				os.Remove("test.zip")
 			})
 
-			a := NewArchiver(Zip)
+			a := GetArchiver("zip")
 
 			b, dst := testCase.routine(t)
 
@@ -294,7 +294,7 @@ func TestTarArchiver_ArchiveFile(t *testing.T) {
 				os.Remove("symlink-path")
 			})
 
-			a := NewArchiver(Tar)
+			a := GetArchiver("tar.gz")
 
 			src, dst := testCase.routine(t)
 
@@ -324,7 +324,7 @@ func TestTarArchiver_ArchiveDir(t *testing.T) {
 				os.Remove("symlink-path")
 			})
 
-			a := NewArchiver(Tar)
+			a := GetArchiver("tar.gz")
 
 			src, dst := testCase.routine(t)
 
@@ -364,7 +364,7 @@ func TestTarArchiver_ArchiveContent(t *testing.T) {
 				os.Remove("test.tar.gz")
 			})
 
-			a := NewArchiver(Tar)
+			a := GetArchiver("tar.gz")
 
 			b, dst := testCase.routine(t)
 

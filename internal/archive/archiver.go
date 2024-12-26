@@ -9,21 +9,19 @@ import (
 	"path/filepath"
 )
 
-// make sure we conform to Archiver
+// make sure we conform to Archiver.
 var (
-	_ Archiver = &ZipArchive{}
+	_ Archiver = &ZipArchiver{}
 	_ Archiver = &TarArchiver{}
 )
 
-func NewArchiver(archType ArchiverType) Archiver {
-	switch archType {
-	case Zip:
-		return &ZipArchive{}
-	case Tar:
-		return &TarArchiver{}
-	default:
-		panic("must not happen: wrong archiver type")
+func GetArchiver(archType string) Archiver {
+	arch, ok := archivers[archType]
+	if !ok {
+		return nil
 	}
+
+	return arch
 }
 
 func WithExcludeList(list []string) Options {
@@ -45,7 +43,7 @@ func WithSymLink(link bool) Options {
 }
 
 // evaluateSymLink takes in an absolute path link
-// evaluates the symbolic link and returns the underlying absolute path
+// evaluates the symbolic link and returns the underlying absolute path.
 func evaluateSymLink(link string) (string, error) {
 	absPath := link
 
@@ -73,7 +71,7 @@ func evaluateSymLink(link string) (string, error) {
 }
 
 // resolveExcludeList takes a list of absolute/relative paths
-// returns a list of absolute paths
+// returns a list of absolute paths.
 func resolveExcludeList(list []string) ([]string, error) {
 	newExcludeList := make([]string, 0, len(list))
 

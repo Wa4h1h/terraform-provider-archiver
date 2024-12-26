@@ -13,8 +13,8 @@ import (
 )
 
 // writeToZip create a new file dst inside the zip file
-// copies src content to the newly created dst file
-func (z *ZipArchive) writeToZip(src, dst string) error {
+// copies src content to the newly created dst file.
+func (z *ZipArchiver) writeToZip(src, dst string) error {
 	f, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("error writeToZip: open %s: %w", src, err)
@@ -37,7 +37,7 @@ func (z *ZipArchive) writeToZip(src, dst string) error {
 // ArchiveFile accepts an absolute path src  and any other path dst
 // every symbolic link is evaluated if SymLink is set to true
 // call writeToZip, to write src content to dst.
-func (z *ZipArchive) ArchiveFile(src, dst string) error {
+func (z *ZipArchiver) ArchiveFile(src, dst string) error {
 	var err error
 
 	if slices.Contains(z.settings.ExcludeList, src) {
@@ -62,7 +62,7 @@ func (z *ZipArchive) ArchiveFile(src, dst string) error {
 // loops recursively through src path and calls ArchiveFile on each encountered file
 // to add it  to zip file
 // every symbolic link is evaluated if SymLink is set to true.
-func (z *ZipArchive) ArchiveDir(src, dst string) error {
+func (z *ZipArchiver) ArchiveDir(src, dst string) error {
 	var err error
 
 	if z.settings.SymLink {
@@ -103,7 +103,7 @@ func (z *ZipArchive) ArchiveDir(src, dst string) error {
 
 // ArchiveContent accepts a slice of bytes and dst path
 // it creates a new dst file within the zip and write they bytes into it.
-func (z *ZipArchive) ArchiveContent(src []byte, dst string) error {
+func (z *ZipArchiver) ArchiveContent(src []byte, dst string) error {
 	w, err := z.zipWriter.Create(dst)
 	if err != nil {
 		return fmt.Errorf("error ArchiveContent: append file %s to zip: %w",
@@ -117,7 +117,7 @@ func (z *ZipArchive) ArchiveContent(src []byte, dst string) error {
 	return nil
 }
 
-func (z *ZipArchive) Open(zipName string, opts ...Options) error {
+func (z *ZipArchiver) Open(zipName string, opts ...Options) error {
 	archiveSettings := &ArchiveSettings{
 		FileMode: DefaultArchiveMode,
 	}
@@ -146,7 +146,7 @@ func (z *ZipArchive) Open(zipName string, opts ...Options) error {
 	return nil
 }
 
-func (z *ZipArchive) Close() error {
+func (z *ZipArchiver) Close() error {
 	err := errors.Join(z.zipWriter.Close(), z.zipFile.Close())
 	if err != nil {
 		return fmt.Errorf("error Close: %w", err)

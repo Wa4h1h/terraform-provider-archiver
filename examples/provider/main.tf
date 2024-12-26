@@ -1,19 +1,9 @@
 terraform {
   required_providers {
-    tools = {
-      source = "registry.terraform.io/Wa4h1h/tools"
+    archiver = {
+      source = "registry.terraform.io/Wa4h1h/archiver"
     }
   }
 }
 
-// http object is optional
-provider "tools" {
-  http = {
-    hostname="hostname"
-    headers={
-      "Content-Type"="application/json"
-    }
-    // in seconds
-    timeout=1
-  }
-}
+provider "archiver" {}

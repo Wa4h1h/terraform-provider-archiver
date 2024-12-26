@@ -8,7 +8,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/Wa4h1h/terraform-provider-tools/internal/provider"
+	"github.com/Wa4h1h/terraform-provider-archiver/internal/provider"
+
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
@@ -23,18 +24,18 @@ func main() {
 	var debug bool
 
 	flag.BoolVar(&debug, "debug",
-		true, "set to true to run the provider with support for debuggers like delve")
+		false, "set to true to run the provider with support for debuggers like delve")
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
 		// Also update the tfplugindocs generate command to either remove the
 		// -provider-name flag or set its value to the updated provider name.
-		Address: "registry.terraform.io/Wa4h1h/tools",
+		Address: "registry.terraform.io/Wa4h1h/archiver",
 		Debug:   debug,
 	}
 
 	err := providerserver.Serve(context.Background(),
-		provider.NewToolsProvider(version), opts)
+		provider.NewArchiverProvider(version), opts)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
