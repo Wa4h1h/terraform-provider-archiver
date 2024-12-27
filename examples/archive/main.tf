@@ -28,5 +28,16 @@ resource "archiver_file" "archive" {
     src = base64encode("content")
     file_path = "content.txt"
   }
+}
 
+output "md5" {
+  value = archiver_file.archive.md5
+}
+
+output "sha256" {
+  value = archiver_file.archive.sha256
+}
+
+output "size" {
+  value = archiver_file.archive.size
 }

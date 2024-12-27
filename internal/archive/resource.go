@@ -47,6 +47,9 @@ type ResourceModel struct {
 	FileBlocks     types.Set    `tfsdk:"file"`
 	DirBlocks      types.Set    `tfsdk:"dir"`
 	ContentBlocks  types.Set    `tfsdk:"content"`
+	Size           types.Int64  `tfsdk:"size"`
+	MD5            types.String `tfsdk:"md5"`
+	SHA256         types.String `tfsdk:"sha256"`
 }
 
 func NewArchiveResource() resource.Resource {
@@ -84,6 +87,18 @@ func (a *archiveResource) Schema(_ context.Context,
 				Optional:    true,
 				ElementType: types.StringType,
 				Description: "list of paths to exclude from the produced archive",
+			},
+			"size": schema.Int64Attribute{
+				Computed:    true,
+				Description: "Output file size",
+			},
+			"md5": schema.StringAttribute{
+				Computed:    true,
+				Description: "Output file computed MD5",
+			},
+			"sha256": schema.StringAttribute{
+				Computed:    true,
+				Description: "Output file computed SHA256",
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -325,6 +340,50 @@ func (a *archiveResource) Create(ctx context.Context,
 			err.Error())
 
 		return
+	}
+
+	f, err := os.Open(archName)
+
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			resp.Diagnostics.AddWarning("close newly created archive file",
+				fmt.Sprintf("can not close the newly created archive %s: %s",
+					archName, err.Error()))
+		}
+	}()
+
+	if err != nil {
+		resp.Diagnostics.AddWarning("open newly created archive",
+			"can not open the newly created archive, to be used"+
+				"for computing md5 and sha256")
+	} else {
+		sha256, err := SHA256(f)
+		if err != nil {
+			resp.Diagnostics.AddWarning("compute sha256",
+				fmt.Sprintf("can not compute sha256 for %s: %s",
+					archName, err.Error()))
+		} else {
+			plan.SHA256 = types.StringValue(sha256)
+		}
+
+		md5, err := MD5(f)
+		if err != nil {
+			resp.Diagnostics.AddWarning("compute md5",
+				fmt.Sprintf("can not compute md5 for %s: %s",
+					archName, err.Error()))
+		} else {
+			plan.MD5 = types.StringValue(md5)
+		}
+
+		size, err := Size(archName)
+		if err != nil {
+			resp.Diagnostics.AddWarning("compute file size",
+				fmt.Sprintf("can not compute file size for %s: %s",
+					archName, err.Error()))
+		} else {
+			plan.Size = types.Int64Value(size)
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
