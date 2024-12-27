@@ -209,7 +209,17 @@ func (a *archiveResource) Create(ctx context.Context,
 		return
 	}
 
-	err = archiver.Open(plan.Name.ValueString(),
+	archName, err := filepath.Abs(plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"can not resolve path",
+			fmt.Sprintf("can not resolve absolute path %s: %s",
+				plan.Name.ValueString(), err.Error()))
+
+		return
+	}
+
+	err = archiver.Open(archName,
 		WithFileMode(os.FileMode(mode)),
 		WithSymLink(symLink),
 		WithExcludeList(list))
@@ -244,7 +254,7 @@ func (a *archiveResource) Create(ctx context.Context,
 
 		absPath, relPath, err := a.cleanPath(orgPath)
 		if err != nil {
-			tflog.Error(ctx, "cant resolve abs path", map[string]interface{}{
+			tflog.Error(ctx, "can not resolve abs path", map[string]interface{}{
 				"org_path": orgPath,
 				"err":      err,
 			})
@@ -253,7 +263,7 @@ func (a *archiveResource) Create(ctx context.Context,
 		}
 
 		if err := archiver.ArchiveFile(absPath, relPath); err != nil {
-			tflog.Error(ctx, "cant add file to archive",
+			tflog.Error(ctx, "can not add file to archive",
 				map[string]interface{}{
 					"path": orgPath,
 					"err":  err,
@@ -266,7 +276,7 @@ func (a *archiveResource) Create(ctx context.Context,
 
 		absPath, relPath, err := a.cleanPath(orgPath)
 		if err != nil {
-			tflog.Error(ctx, "cant resolve abs path", map[string]interface{}{
+			tflog.Error(ctx, "can not resolve abs path", map[string]interface{}{
 				"org_path": orgPath,
 				"err":      err,
 			})
@@ -275,7 +285,7 @@ func (a *archiveResource) Create(ctx context.Context,
 		}
 
 		if err := archiver.ArchiveDir(absPath, relPath); err != nil {
-			tflog.Error(ctx, "cant add file to archive",
+			tflog.Error(ctx, "can not add file to archive",
 				map[string]interface{}{
 					"path": orgPath,
 					"err":  err,
@@ -286,7 +296,7 @@ func (a *archiveResource) Create(ctx context.Context,
 	for _, c := range contents {
 		b, err := base64.StdEncoding.DecodeString(c.Src.ValueString())
 		if err != nil {
-			tflog.Error(ctx, "cant decode content",
+			tflog.Error(ctx, "can not decode content",
 				map[string]interface{}{
 					"dst": c.FilePath.ValueString(),
 					"err": err,
@@ -300,7 +310,7 @@ func (a *archiveResource) Create(ctx context.Context,
 		}
 
 		if err := archiver.ArchiveContent(b, relPath); err != nil {
-			tflog.Error(ctx, "cant add content to archive",
+			tflog.Error(ctx, "can not add content to archive",
 				map[string]interface{}{
 					"path": relPath,
 					"err":  err,
@@ -328,11 +338,49 @@ func (a *archiveResource) Read(ctx context.Context,
 func (a *archiveResource) Update(ctx context.Context,
 	req resource.UpdateRequest, resp *resource.UpdateResponse,
 ) {
+	tflog.Debug(ctx, "updating archive....")
+	var plan ResourceModel
+
+	d := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(d...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (a *archiveResource) Delete(ctx context.Context,
 	req resource.DeleteRequest, resp *resource.DeleteResponse,
 ) {
+	var (
+		archive string
+		err     error
+	)
+
+	d := req.State.GetAttribute(ctx, path.Root("name"), &archive)
+	resp.Diagnostics.Append(d...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	archive, err = filepath.Abs(archive)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"can not resolve path",
+			fmt.Sprintf("can not resolve absolute path %s: %s",
+				archive, err.Error()))
+
+		return
+	}
+
+	err = os.Remove(archive)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"can not delete archive",
+			fmt.Sprintf("can not delete %s: %s",
+				archive, err.Error()))
+	}
 }
 
 func (a *archiveResource) cleanPath(path string) (string, string, error) {
