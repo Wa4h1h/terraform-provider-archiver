@@ -2,9 +2,12 @@ package archive
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -134,7 +137,6 @@ func (a *archiveResource) ValidateConfig(ctx context.Context,
 
 	d := req.Config.Get(ctx, &plan)
 	resp.Diagnostics.Append(d...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -168,32 +170,36 @@ func (a *archiveResource) Create(ctx context.Context,
 		return
 	}
 
-	archiver := GetArchiver(plan.Type.String())
+	archiver := GetArchiver(plan.Type.ValueString())
 	if archiver == nil {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("type"),
 			"unsupported archive type",
-			fmt.Sprintf("unsported archive type %s, "+
-				"only zip and tar.gz are supported", plan.Type.String()))
+			fmt.Sprintf("unsported archive type %s, only zip and tar.gz are supported",
+				plan.Type.ValueString()))
 
 		return
 	}
 
-	mode, err := strconv.ParseUint(plan.OutMode.String(), 10, 32)
-	if err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("out_mode"),
-			fmt.Sprintf("can not parse file mode %s", plan.OutMode.String()),
-			err.Error())
+	var (
+		mode    = uint64(DefaultArchiveMode)
+		symLink = false
+		err     error
+	)
 
-		return
+	if !plan.OutMode.IsNull() {
+		mode, err = strconv.ParseUint(plan.OutMode.ValueString(), 10, 32)
+		if err != nil {
+			resp.Diagnostics.AddAttributeError(path.Root("out_mode"),
+				fmt.Sprintf("can not parse file mode %s", plan.OutMode.ValueString()),
+				err.Error())
+
+			return
+		}
 	}
 
-	sym, err := strconv.ParseBool(plan.ResolveSymLink.String())
-	if err != nil {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("resolve_symlink"),
-			fmt.Sprintf("can not parse resolve_symlink %s", plan.ResolveSymLink.String()),
-			"false will be used a value: "+err.Error())
+	if !plan.ResolveSymLink.IsNull() {
+		symLink = plan.ResolveSymLink.ValueBool()
 	}
 
 	list := make([]string, 0, len(plan.ExcludeList.Elements()))
@@ -203,37 +209,115 @@ func (a *archiveResource) Create(ctx context.Context,
 		return
 	}
 
-	err = archiver.Open(plan.Name.String(),
+	err = archiver.Open(plan.Name.ValueString(),
 		WithFileMode(os.FileMode(mode)),
-		WithSymLink(sym),
+		WithSymLink(symLink),
 		WithExcludeList(list))
 	if err != nil {
 		resp.Diagnostics.AddError(
-			fmt.Sprintf("failed to create %s", plan.Name.String()),
+			fmt.Sprintf("failed to create %s", plan.Name.ValueString()),
 			err.Error())
 
 		return
 	}
 
 	files := make([]File, 0, len(plan.FileBlocks.Elements()))
-
 	resp.Diagnostics.Append(plan.FileBlocks.ElementsAs(ctx, &files, false)...)
 	if resp.Diagnostics.HasError() {
-		return
+		tflog.Warn(ctx, "failed to files to archive")
+	}
+
+	dirs := make([]Dir, 0, len(plan.DirBlocks.Elements()))
+	resp.Diagnostics.Append(plan.DirBlocks.ElementsAs(ctx, &dirs, false)...)
+	if resp.Diagnostics.HasError() {
+		tflog.Warn(ctx, "failed to dirs to archive")
+	}
+
+	contents := make([]Content, 0, len(plan.ContentBlocks.Elements()))
+	resp.Diagnostics.Append(plan.ContentBlocks.ElementsAs(ctx, &contents, false)...)
+	if resp.Diagnostics.HasError() {
+		tflog.Warn(ctx, "failed to contents to archive")
 	}
 
 	for _, f := range files {
-		tflog.Debug(ctx, "path --> "+f.Path.String())
+		orgPath := f.Path.ValueString()
+
+		absPath, relPath, err := a.cleanPath(orgPath)
+		if err != nil {
+			tflog.Error(ctx, "cant resolve abs path", map[string]interface{}{
+				"org_path": orgPath,
+				"err":      err,
+			})
+
+			continue
+		}
+
+		if err := archiver.ArchiveFile(absPath, relPath); err != nil {
+			tflog.Error(ctx, "cant add file to archive",
+				map[string]interface{}{
+					"path": orgPath,
+					"err":  err,
+				})
+		}
+	}
+
+	for _, d := range dirs {
+		orgPath := d.Path.ValueString()
+
+		absPath, relPath, err := a.cleanPath(orgPath)
+		if err != nil {
+			tflog.Error(ctx, "cant resolve abs path", map[string]interface{}{
+				"org_path": orgPath,
+				"err":      err,
+			})
+
+			continue
+		}
+
+		if err := archiver.ArchiveDir(absPath, relPath); err != nil {
+			tflog.Error(ctx, "cant add file to archive",
+				map[string]interface{}{
+					"path": orgPath,
+					"err":  err,
+				})
+		}
+	}
+
+	for _, c := range contents {
+		b, err := base64.StdEncoding.DecodeString(c.Src.ValueString())
+		if err != nil {
+			tflog.Error(ctx, "cant decode content",
+				map[string]interface{}{
+					"dst": c.FilePath.ValueString(),
+					"err": err,
+				})
+		}
+
+		relPath := filepath.Clean(c.FilePath.ValueString())
+
+		for strings.HasPrefix(relPath, "../") {
+			relPath = strings.TrimPrefix(relPath, "../")
+		}
+
+		if err := archiver.ArchiveContent(b, relPath); err != nil {
+			tflog.Error(ctx, "cant add content to archive",
+				map[string]interface{}{
+					"path": relPath,
+					"err":  err,
+				})
+		}
 	}
 
 	err = archiver.Close()
 	if err != nil {
 		resp.Diagnostics.AddError(
-			fmt.Sprintf("failed to close %s", plan.Name.String()),
+			fmt.Sprintf("failed to close %s", plan.Name.ValueString()),
 			err.Error())
 
 		return
 	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (a *archiveResource) Read(ctx context.Context,
@@ -249,4 +333,19 @@ func (a *archiveResource) Update(ctx context.Context,
 func (a *archiveResource) Delete(ctx context.Context,
 	req resource.DeleteRequest, resp *resource.DeleteResponse,
 ) {
+}
+
+func (a *archiveResource) cleanPath(path string) (string, string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", err
+	}
+
+	relPath := filepath.Clean(path)
+
+	for strings.HasPrefix(relPath, "../") {
+		relPath = strings.TrimPrefix(relPath, "../")
+	}
+
+	return absPath, relPath, nil
 }

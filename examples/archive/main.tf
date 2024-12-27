@@ -10,28 +10,23 @@ provider "archiver" {}
 
 resource "archiver_file" "archive" {
   name = "example.zip"
-  type = "xxx"
-  out_mode = null
-
-  exclude_list = ["/path/example/dir", "/path/example.txt"]
-
-  resolve_symlink = null
+  type = "zip"
 
   file {
-    path = "../path/file.txt"
+    path = "../../internal/archive/archiver.go"
   }
 
   file {
-    path = "../path/file.txt"
+    path = "../../internal/provider/provider.go"
   }
 
   dir {
-    path = "../path/dir"
+    path = "../../.github"
   }
 
   content {
     src = base64encode("content")
-    file_path = "/path/store/src/content.txt"
+    file_path = "content.txt"
   }
 
 }
