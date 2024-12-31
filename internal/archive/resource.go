@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -30,7 +29,6 @@ import (
 var (
 	_ resource.ResourceWithValidateConfig = &archiveResource{}
 	_ resource.Resource                   = &archiveResource{}
-	_ resource.ResourceWithImportState    = &archiveResource{}
 )
 
 type archiveResource struct{}
@@ -406,7 +404,7 @@ func (a *archiveResource) Update(ctx context.Context,
 						fmt.Sprintf("can not rename to %s: %s", newName, err))
 				}
 
-				plan.Name = types.StringValue(newName)
+				plan.AbsPath = types.StringValue(newName)
 			}
 		}
 	}
@@ -458,10 +456,6 @@ func (a *archiveResource) Delete(ctx context.Context,
 	}
 }
 
-func (a *archiveResource) ImportState(ctx context.Context,
-	req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-}
-
 func (a *archiveResource) cleanPath(path string) (string, string, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
@@ -478,14 +472,7 @@ func (a *archiveResource) cleanPath(path string) (string, string, error) {
 }
 
 func (a *archiveResource) checksums(name string) (string, string, error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return "", "", err
-	}
-
-	defer f.Close()
-
-	b, err := io.ReadAll(f)
+	b, err := os.ReadFile(name)
 	if err != nil {
 		return "", "", err
 	}
