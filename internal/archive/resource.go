@@ -3,11 +3,20 @@ package archive
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -21,36 +30,10 @@ import (
 var (
 	_ resource.ResourceWithValidateConfig = &archiveResource{}
 	_ resource.Resource                   = &archiveResource{}
+	_ resource.ResourceWithImportState    = &archiveResource{}
 )
 
 type archiveResource struct{}
-
-type File struct {
-	Path types.String `tfsdk:"path"`
-}
-
-type Dir struct {
-	Path types.String `tfsdk:"path"`
-}
-
-type Content struct {
-	Src      types.String `tfsdk:"src"`
-	FilePath types.String `tfsdk:"file_path"`
-}
-
-type ResourceModel struct {
-	Name           types.String `tfsdk:"name"`
-	Type           types.String `tfsdk:"type"`
-	OutMode        types.String `tfsdk:"out_mode"`
-	ExcludeList    types.List   `tfsdk:"exclude_list"`
-	ResolveSymLink types.Bool   `tfsdk:"resolve_symlink"`
-	FileBlocks     types.Set    `tfsdk:"file"`
-	DirBlocks      types.Set    `tfsdk:"dir"`
-	ContentBlocks  types.Set    `tfsdk:"content"`
-	Size           types.Int64  `tfsdk:"size"`
-	MD5            types.String `tfsdk:"md5"`
-	SHA256         types.String `tfsdk:"sha256"`
-}
 
 func NewArchiveResource() resource.Resource {
 	return &archiveResource{}
@@ -74,6 +57,9 @@ func (a *archiveResource) Schema(_ context.Context,
 			"type": schema.StringAttribute{
 				Required:    true,
 				Description: "archive type: zip or tar.gz",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"out_mode": schema.StringAttribute{
 				Optional:    true,
@@ -82,11 +68,17 @@ func (a *archiveResource) Schema(_ context.Context,
 			"resolve_symlink": schema.BoolAttribute{
 				Optional:    true,
 				Description: "resolve symbolic link: default is false",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
 			},
 			"exclude_list": schema.ListAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
 				Description: "list of paths to exclude from the produced archive",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
 			},
 			"size": schema.Int64Attribute{
 				Computed:    true,
@@ -100,6 +92,10 @@ func (a *archiveResource) Schema(_ context.Context,
 				Computed:    true,
 				Description: "Output file computed SHA256",
 			},
+			"abs_path": schema.StringAttribute{
+				Computed:    true,
+				Description: "Output archive absolute path",
+			},
 		},
 		Blocks: map[string]schema.Block{
 			"file": schema.SetNestedBlock{
@@ -112,6 +108,9 @@ func (a *archiveResource) Schema(_ context.Context,
 						},
 					},
 				},
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
+				},
 			},
 			"dir": schema.SetNestedBlock{
 				Description: "directory to include in the archive",
@@ -122,6 +121,9 @@ func (a *archiveResource) Schema(_ context.Context,
 							Description: "directory path",
 						},
 					},
+				},
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
 				},
 			},
 			"content": schema.SetNestedBlock{
@@ -138,6 +140,9 @@ func (a *archiveResource) Schema(_ context.Context,
 						},
 					},
 				},
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
+				},
 			},
 		},
 	}
@@ -148,7 +153,7 @@ func (a *archiveResource) ValidateConfig(ctx context.Context,
 ) {
 	tflog.Debug(ctx, "validating resource config...")
 
-	var plan ResourceModel
+	var plan Model
 
 	d := req.Config.Get(ctx, &plan)
 	resp.Diagnostics.Append(d...)
@@ -176,7 +181,7 @@ func (a *archiveResource) Create(ctx context.Context,
 	req resource.CreateRequest, resp *resource.CreateResponse,
 ) {
 	tflog.Debug(ctx, "creating archive....")
-	var plan ResourceModel
+	var plan Model
 
 	d := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(d...)
@@ -197,20 +202,19 @@ func (a *archiveResource) Create(ctx context.Context,
 	}
 
 	var (
-		mode    = uint64(DefaultArchiveMode)
+		mode    = DefaultArchiveMode
 		symLink = false
 		err     error
 	)
 
 	if !plan.OutMode.IsNull() {
-		mode, err = strconv.ParseUint(plan.OutMode.ValueString(), 10, 32)
+		m, err := strconv.ParseInt(plan.OutMode.ValueString(), 8, 32)
 		if err != nil {
-			resp.Diagnostics.AddAttributeError(path.Root("out_mode"),
-				fmt.Sprintf("can not parse file mode %s", plan.OutMode.ValueString()),
-				err.Error())
-
-			return
+			resp.Diagnostics.AddWarning("set archive permission",
+				fmt.Sprintf("can not set archive file perimssions: %s", err))
 		}
+
+		mode = os.FileMode(m)
 	}
 
 	if !plan.ResolveSymLink.IsNull() {
@@ -229,13 +233,13 @@ func (a *archiveResource) Create(ctx context.Context,
 		resp.Diagnostics.AddError(
 			"can not resolve path",
 			fmt.Sprintf("can not resolve absolute path %s: %s",
-				plan.Name.ValueString(), err.Error()))
+				plan.Name.ValueString(), err))
 
 		return
 	}
 
 	err = archiver.Open(archName,
-		WithFileMode(os.FileMode(mode)),
+		WithFileMode(mode),
 		WithSymLink(symLink),
 		WithExcludeList(list))
 	if err != nil {
@@ -252,11 +256,15 @@ func (a *archiveResource) Create(ctx context.Context,
 		tflog.Warn(ctx, "failed to files to archive")
 	}
 
+	a.appendFiles(ctx, archiver, files...)
+
 	dirs := make([]Dir, 0, len(plan.DirBlocks.Elements()))
 	resp.Diagnostics.Append(plan.DirBlocks.ElementsAs(ctx, &dirs, false)...)
 	if resp.Diagnostics.HasError() {
 		tflog.Warn(ctx, "failed to dirs to archive")
 	}
+
+	a.appendDirs(ctx, archiver, dirs...)
 
 	contents := make([]Content, 0, len(plan.ContentBlocks.Elements()))
 	resp.Diagnostics.Append(plan.ContentBlocks.ElementsAs(ctx, &contents, false)...)
@@ -264,6 +272,237 @@ func (a *archiveResource) Create(ctx context.Context,
 		tflog.Warn(ctx, "failed to contents to archive")
 	}
 
+	a.appendContents(ctx, archiver, contents...)
+
+	err = archiver.Close()
+	if err != nil {
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("failed to close %s", plan.Name.ValueString()),
+			err.Error())
+
+		return
+	}
+
+	var (
+		md5    string
+		sha256 string
+		size   int64
+	)
+
+	md5, sha256, err = a.checksums(archName)
+	if err != nil {
+		resp.Diagnostics.AddWarning("computing md5 and sha2256",
+			fmt.Sprintf("could not compute md5 and sha256 outputs: %s", err))
+	}
+
+	plan.MD5 = types.StringValue(md5)
+	plan.SHA256 = types.StringValue(sha256)
+
+	size, err = Size(archName)
+	if err != nil {
+		resp.Diagnostics.AddWarning("compute file size",
+			fmt.Sprintf("can not compute file size for %s: %s",
+				archName, err))
+	}
+
+	plan.Size = types.Int64Value(size)
+	plan.AbsPath = types.StringValue(archName)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (a *archiveResource) Read(ctx context.Context,
+	req resource.ReadRequest, resp *resource.ReadResponse,
+) {
+	tflog.Debug(ctx, "refreshing state....")
+
+	var state Model
+
+	d := req.State.Get(ctx, &state)
+
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	archName := state.AbsPath.ValueString()
+
+	info, err := os.Stat(archName)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			resp.State.RemoveResource(ctx)
+
+			state.MD5 = types.StringNull()
+			state.SHA256 = types.StringNull()
+			state.Size = types.Int64Null()
+
+			return
+		}
+
+		resp.Diagnostics.AddWarning(fmt.Sprintf("load %s info", archName),
+			fmt.Sprintf("load %s info: %s", archName, err))
+	}
+
+	state.Size = types.Int64Value(info.Size())
+
+	md5, sha256, err := a.checksums(archName)
+	if err != nil {
+		resp.Diagnostics.AddWarning("computing md5 and sha2256",
+			fmt.Sprintf("could not refresh md5 and sha256 outputs: %s", err))
+	} else {
+		state.SHA256 = types.StringValue(sha256)
+		state.MD5 = types.StringValue(md5)
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+func (a *archiveResource) Update(ctx context.Context,
+	req resource.UpdateRequest, resp *resource.UpdateResponse,
+) {
+	tflog.Debug(ctx, "updating archive....")
+	var (
+		plan  Model
+		state Model
+		err   error
+	)
+
+	d := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(d...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	d = req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(d...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	nameFromState := state.Name.ValueString()
+
+	if !plan.Name.IsNull() {
+		newName := plan.Name.ValueString()
+
+		if newName != nameFromState {
+			nameFromState, err = filepath.Abs(nameFromState)
+			if err != nil {
+				resp.Diagnostics.AddWarning("resolve old abs path",
+					fmt.Sprintf("could not resolve old abs path %s: %s", nameFromState, err))
+			}
+
+			newName, err = filepath.Abs(newName)
+			if err != nil {
+				resp.Diagnostics.AddWarning("resolve new abs path",
+					fmt.Sprintf("could not resolve new abs path %s: %s", newName, err))
+			}
+
+			if err == nil {
+				err = os.Rename(nameFromState, newName)
+				if err != nil {
+					resp.Diagnostics.AddWarning(fmt.Sprintf("rename archive file %s", nameFromState),
+						fmt.Sprintf("can not rename to %s: %s", newName, err))
+				}
+
+				plan.Name = types.StringValue(newName)
+			}
+		}
+	}
+
+	if !plan.OutMode.IsNull() {
+		newMode, err := strconv.ParseInt(plan.OutMode.ValueString(), 8, 32)
+		if err != nil {
+			resp.Diagnostics.AddWarning("change archive permission",
+				fmt.Sprintf("can not cahnge archive file perimssions: %s", err))
+		} else {
+			err = os.Chmod(nameFromState, os.FileMode(newMode))
+			if err != nil {
+				resp.Diagnostics.AddWarning(fmt.Sprintf("change %s mode", nameFromState),
+					fmt.Sprintf("could not change mode to %d: %s", newMode, err))
+			}
+
+			plan.OutMode = types.StringValue(fmt.Sprintf("%d", newMode))
+		}
+	}
+
+	plan.MD5 = state.MD5
+	plan.SHA256 = state.SHA256
+	plan.Size = state.Size
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (a *archiveResource) Delete(ctx context.Context,
+	req resource.DeleteRequest, resp *resource.DeleteResponse,
+) {
+	var (
+		archive string
+		err     error
+	)
+
+	d := req.State.GetAttribute(ctx, path.Root("abs_path"), &archive)
+	resp.Diagnostics.Append(d...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err = os.Remove(archive)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"can not delete archive",
+			fmt.Sprintf("can not delete %s: %s",
+				archive, err))
+	}
+}
+
+func (a *archiveResource) ImportState(ctx context.Context,
+	req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+}
+
+func (a *archiveResource) cleanPath(path string) (string, string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", err
+	}
+
+	relPath := filepath.Clean(path)
+
+	for strings.HasPrefix(relPath, "../") {
+		relPath = strings.TrimPrefix(relPath, "../")
+	}
+
+	return absPath, relPath, nil
+}
+
+func (a *archiveResource) checksums(name string) (string, string, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return "", "", err
+	}
+
+	defer f.Close()
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return "", "", err
+	}
+
+	sha256, err := SHA256(b)
+	if err != nil {
+		return "", "", err
+	}
+
+	md5 := MD5(b)
+
+	return md5, sha256, nil
+}
+
+func (a *archiveResource) appendFiles(ctx context.Context,
+	archiver Archiver, files ...File,
+) {
 	for _, f := range files {
 		orgPath := f.Path.ValueString()
 
@@ -285,7 +524,11 @@ func (a *archiveResource) Create(ctx context.Context,
 				})
 		}
 	}
+}
 
+func (a *archiveResource) appendDirs(ctx context.Context,
+	archiver Archiver, dirs ...Dir,
+) {
 	for _, d := range dirs {
 		orgPath := d.Path.ValueString()
 
@@ -300,14 +543,18 @@ func (a *archiveResource) Create(ctx context.Context,
 		}
 
 		if err := archiver.ArchiveDir(absPath, relPath); err != nil {
-			tflog.Error(ctx, "can not add file to archive",
+			tflog.Error(ctx, "can not add dir to archive",
 				map[string]interface{}{
 					"path": orgPath,
 					"err":  err,
 				})
 		}
 	}
+}
 
+func (a *archiveResource) appendContents(ctx context.Context,
+	archiver Archiver, contents ...Content,
+) {
 	for _, c := range contents {
 		b, err := base64.StdEncoding.DecodeString(c.Src.ValueString())
 		if err != nil {
@@ -332,127 +579,4 @@ func (a *archiveResource) Create(ctx context.Context,
 				})
 		}
 	}
-
-	err = archiver.Close()
-	if err != nil {
-		resp.Diagnostics.AddError(
-			fmt.Sprintf("failed to close %s", plan.Name.ValueString()),
-			err.Error())
-
-		return
-	}
-
-	f, err := os.Open(archName)
-
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			resp.Diagnostics.AddWarning("close newly created archive file",
-				fmt.Sprintf("can not close the newly created archive %s: %s",
-					archName, err.Error()))
-		}
-	}()
-
-	if err != nil {
-		resp.Diagnostics.AddWarning("open newly created archive",
-			"can not open the newly created archive, to be used"+
-				"for computing md5 and sha256")
-	} else {
-		sha256, err := SHA256(f)
-		if err != nil {
-			resp.Diagnostics.AddWarning("compute sha256",
-				fmt.Sprintf("can not compute sha256 for %s: %s",
-					archName, err.Error()))
-		} else {
-			plan.SHA256 = types.StringValue(sha256)
-		}
-
-		md5, err := MD5(f)
-		if err != nil {
-			resp.Diagnostics.AddWarning("compute md5",
-				fmt.Sprintf("can not compute md5 for %s: %s",
-					archName, err.Error()))
-		} else {
-			plan.MD5 = types.StringValue(md5)
-		}
-
-		size, err := Size(archName)
-		if err != nil {
-			resp.Diagnostics.AddWarning("compute file size",
-				fmt.Sprintf("can not compute file size for %s: %s",
-					archName, err.Error()))
-		} else {
-			plan.Size = types.Int64Value(size)
-		}
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-}
-
-func (a *archiveResource) Read(ctx context.Context,
-	req resource.ReadRequest, resp *resource.ReadResponse,
-) {
-}
-
-func (a *archiveResource) Update(ctx context.Context,
-	req resource.UpdateRequest, resp *resource.UpdateResponse,
-) {
-	tflog.Debug(ctx, "updating archive....")
-	var plan ResourceModel
-
-	d := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(d...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-}
-
-func (a *archiveResource) Delete(ctx context.Context,
-	req resource.DeleteRequest, resp *resource.DeleteResponse,
-) {
-	var (
-		archive string
-		err     error
-	)
-
-	d := req.State.GetAttribute(ctx, path.Root("name"), &archive)
-	resp.Diagnostics.Append(d...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	archive, err = filepath.Abs(archive)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"can not resolve path",
-			fmt.Sprintf("can not resolve absolute path %s: %s",
-				archive, err.Error()))
-
-		return
-	}
-
-	err = os.Remove(archive)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"can not delete archive",
-			fmt.Sprintf("can not delete %s: %s",
-				archive, err.Error()))
-	}
-}
-
-func (a *archiveResource) cleanPath(path string) (string, string, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", "", err
-	}
-
-	relPath := filepath.Clean(path)
-
-	for strings.HasPrefix(relPath, "../") {
-		relPath = strings.TrimPrefix(relPath, "../")
-	}
-
-	return absPath, relPath, nil
 }

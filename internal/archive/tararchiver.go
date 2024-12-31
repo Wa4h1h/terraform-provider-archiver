@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -79,6 +80,10 @@ func (t *TarArchiver) ArchiveFile(src, dst string) error {
 func (t *TarArchiver) ArchiveDir(src, dst string) error {
 	var err error
 
+	if slices.Contains(t.settings.ExcludeList, src) {
+		return nil
+	}
+
 	if t.settings.SymLink {
 		src, err = evaluateSymLink(src)
 		if err != nil {
@@ -137,14 +142,17 @@ func (t *TarArchiver) ArchiveContent(src []byte, dst string) error {
 
 func (t *TarArchiver) Open(tarName string, opts ...Options) error {
 	archiveSettings := &ArchiveSettings{
-		FileMode: DefaultArchiveMode,
+		FileMode: os.FileMode(DefaultArchiveMode),
 	}
 
 	for _, opt := range opts {
 		opt(archiveSettings)
 	}
 
-	f, err := os.OpenFile(tarName, os.O_TRUNC|os.O_CREATE|os.O_RDWR, archiveSettings.FileMode)
+	oldUmask := syscall.Umask(0)
+	defer syscall.Umask(oldUmask)
+
+	f, err := os.OpenFile(tarName, os.O_APPEND|os.O_CREATE|os.O_RDWR, archiveSettings.FileMode)
 	if err != nil {
 		return fmt.Errorf("error: Create zip file %s: %w", tarName, err)
 	}

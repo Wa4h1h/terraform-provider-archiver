@@ -5,6 +5,8 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"os"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 type ArchiverResult struct {
@@ -50,4 +52,32 @@ type TarArchiver struct {
 var archivers = map[string]Archiver{
 	"zip":    &ZipArchiver{},
 	"tar.gz": &TarArchiver{},
+}
+
+type File struct {
+	Path types.String `tfsdk:"path"`
+}
+
+type Dir struct {
+	Path types.String `tfsdk:"path"`
+}
+
+type Content struct {
+	Src      types.String `tfsdk:"src"`
+	FilePath types.String `tfsdk:"file_path"`
+}
+
+type Model struct {
+	Name           types.String `tfsdk:"name"`
+	Type           types.String `tfsdk:"type"`
+	OutMode        types.String `tfsdk:"out_mode"`
+	MD5            types.String `tfsdk:"md5"`
+	SHA256         types.String `tfsdk:"sha256"`
+	AbsPath        types.String `tfsdk:"abs_path"`
+	ExcludeList    types.List   `tfsdk:"exclude_list"`
+	ResolveSymLink types.Bool   `tfsdk:"resolve_symlink"`
+	FileBlocks     types.Set    `tfsdk:"file"`
+	DirBlocks      types.Set    `tfsdk:"dir"`
+	ContentBlocks  types.Set    `tfsdk:"content"`
+	Size           types.Int64  `tfsdk:"size"`
 }

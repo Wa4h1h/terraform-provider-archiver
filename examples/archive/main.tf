@@ -12,6 +12,10 @@ resource "archiver_file" "archive" {
   name = "example.zip"
   type = "zip"
 
+  out_mode="777"
+
+  exclude_list=["../../internal/archive/archiver.go"]
+
   file {
     path = "../../internal/archive/archiver.go"
   }

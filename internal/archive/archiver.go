@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 )
@@ -87,21 +86,11 @@ func resolveExcludeList(list []string) ([]string, error) {
 	return newExcludeList, nil
 }
 
-func MD5(f *os.File) (string, error) {
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return "", fmt.Errorf("error MD5: read bytes: %w", err)
-	}
-
-	return fmt.Sprintf("%x", md5.Sum(b)), nil
+func MD5(b []byte) string {
+	return fmt.Sprintf("%x", md5.Sum(b))
 }
 
-func SHA256(f *os.File) (string, error) {
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return "", fmt.Errorf("error SHA256: read bytes: %w", err)
-	}
-
+func SHA256(b []byte) (string, error) {
 	hash := sha256.New()
 
 	if _, err := hash.Write(b); err != nil {

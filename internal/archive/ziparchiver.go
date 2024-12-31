@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 )
 
 // writeToZip create a new file dst inside the zip file
@@ -64,6 +65,10 @@ func (z *ZipArchiver) ArchiveFile(src, dst string) error {
 // every symbolic link is evaluated if SymLink is set to true.
 func (z *ZipArchiver) ArchiveDir(src, dst string) error {
 	var err error
+
+	if slices.Contains(z.settings.ExcludeList, src) {
+		return nil
+	}
 
 	if z.settings.SymLink {
 		src, err = evaluateSymLink(src)
@@ -126,7 +131,10 @@ func (z *ZipArchiver) Open(zipName string, opts ...Options) error {
 		opt(archiveSettings)
 	}
 
-	f, err := os.OpenFile(zipName, os.O_TRUNC|os.O_CREATE|os.O_RDWR, archiveSettings.FileMode)
+	oldUmask := syscall.Umask(0)
+	defer syscall.Umask(oldUmask)
+
+	f, err := os.OpenFile(zipName, os.O_APPEND|os.O_CREATE|os.O_RDWR, archiveSettings.FileMode)
 	if err != nil {
 		return fmt.Errorf("error: Create zip file %s: %w", zipName, err)
 	}

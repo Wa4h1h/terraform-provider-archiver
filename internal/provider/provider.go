@@ -47,7 +47,9 @@ func (t *ArchiverProvider) Configure(ctx context.Context,
 
 func (t *ArchiverProvider) DataSources(ctx context.Context,
 ) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		archive.NewArchiveDataSource,
+	}
 }
 
 func (t *ArchiverProvider) Resources(ctx context.Context,
