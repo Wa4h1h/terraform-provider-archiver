@@ -1,3 +1,5 @@
+// Copyright (c) HashiCorp, Inc.
+
 package provider
 
 import (
@@ -13,7 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestArchiveFileResource(t *testing.T) {
+func TestACCArchiveFileResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{

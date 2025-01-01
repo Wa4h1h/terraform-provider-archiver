@@ -1,3 +1,5 @@
+// Copyright (c) HashiCorp, Inc.
+
 package archive
 
 import (
@@ -47,6 +49,7 @@ func (a *archiveResource) Schema(_ context.Context,
 	_ resource.SchemaRequest, resp *resource.SchemaResponse,
 ) {
 	resp.Schema = schema.Schema{
+		Description: "Generate an zip/tar.gz archive file",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:    true,
