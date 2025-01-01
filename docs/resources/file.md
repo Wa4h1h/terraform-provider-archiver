@@ -13,8 +13,6 @@ Generate an zip/tar.gz archive file
 ## Example Usage
 
 ```terraform
-# Copyright (c) HashiCorp, Inc.
-
 terraform {
   required_providers {
     archiver = {
