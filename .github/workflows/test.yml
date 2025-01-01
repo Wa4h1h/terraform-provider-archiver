@@ -83,5 +83,5 @@ jobs:
           TF_ACC: "1"
         run: |
           go test -v -cover ./internal/provider/
-          go test -b ./internal/archive/
+          go test -v ./internal/archive/
         timeout-minutes: 10
