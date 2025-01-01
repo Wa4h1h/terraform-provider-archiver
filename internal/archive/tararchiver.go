@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -150,9 +149,6 @@ func (t *TarArchiver) Open(tarName string, opts ...Options) error {
 	for _, opt := range opts {
 		opt(archiveSettings)
 	}
-
-	oldUmask := syscall.Umask(0)
-	defer syscall.Umask(oldUmask)
 
 	f, err := os.OpenFile(tarName, os.O_APPEND|os.O_CREATE|os.O_RDWR, archiveSettings.FileMode)
 	if err != nil {

@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"syscall"
 )
 
 // writeToZip create a new file dst inside the zip file
@@ -132,9 +131,6 @@ func (z *ZipArchiver) Open(zipName string, opts ...Options) error {
 	for _, opt := range opts {
 		opt(archiveSettings)
 	}
-
-	oldUmask := syscall.Umask(0)
-	defer syscall.Umask(oldUmask)
 
 	f, err := os.OpenFile(zipName, os.O_APPEND|os.O_CREATE|os.O_RDWR, archiveSettings.FileMode)
 	if err != nil {
