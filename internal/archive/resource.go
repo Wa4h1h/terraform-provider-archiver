@@ -287,7 +287,7 @@ func (a *archiveResource) Create(ctx context.Context,
 		size   int64
 	)
 
-	md5, sha256, err = a.checksums(archName)
+	md5, sha256, err = Checksums(archName)
 	if err != nil {
 		resp.Diagnostics.AddWarning("computing md5 and sha2256",
 			fmt.Sprintf("could not compute md5 and sha256 outputs: %s", err))
@@ -343,7 +343,7 @@ func (a *archiveResource) Read(ctx context.Context,
 
 	state.Size = types.Int64Value(info.Size())
 
-	md5, sha256, err := a.checksums(archName)
+	md5, sha256, err := Checksums(archName)
 	if err != nil {
 		resp.Diagnostics.AddWarning("computing md5 and sha2256",
 			fmt.Sprintf("could not refresh md5 and sha256 outputs: %s", err))
@@ -471,7 +471,7 @@ func (a *archiveResource) cleanPath(path string) (string, string, error) {
 	return absPath, relPath, nil
 }
 
-func (a *archiveResource) checksums(name string) (string, string, error) {
+func Checksums(name string) (string, string, error) {
 	b, err := os.ReadFile(name)
 	if err != nil {
 		return "", "", err

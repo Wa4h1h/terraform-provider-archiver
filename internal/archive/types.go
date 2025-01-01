@@ -9,12 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-type ArchiverResult struct {
-	Sha256 string
-	MD5    string
-	Size   int64
-}
-
 type ArchiveSettings struct {
 	// files/dirs to exclude during archiving
 	ExcludeList []string

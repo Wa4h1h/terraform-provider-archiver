@@ -35,22 +35,22 @@ func (t *ArchiverProvider) Metadata(_ context.Context,
 
 func (t *ArchiverProvider) Schema(_ context.Context,
 	_ provider.SchemaRequest,
-	resp *provider.SchemaResponse,
+	_ *provider.SchemaResponse,
 ) {
 }
 
-func (t *ArchiverProvider) Configure(ctx context.Context,
-	req provider.ConfigureRequest,
-	resp *provider.ConfigureResponse,
+func (t *ArchiverProvider) Configure(_ context.Context,
+	_ provider.ConfigureRequest,
+	_ *provider.ConfigureResponse,
 ) {
 }
 
-func (t *ArchiverProvider) DataSources(ctx context.Context,
+func (t *ArchiverProvider) DataSources(_ context.Context,
 ) []func() datasource.DataSource {
 	return []func() datasource.DataSource{}
 }
 
-func (t *ArchiverProvider) Resources(ctx context.Context,
+func (t *ArchiverProvider) Resources(_ context.Context,
 ) []func() resource.Resource {
 	return []func() resource.Resource{
 		archive.NewArchiveResource,
