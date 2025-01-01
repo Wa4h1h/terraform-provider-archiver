@@ -142,7 +142,7 @@ func (t *TarArchiver) ArchiveContent(src []byte, dst string) error {
 
 func (t *TarArchiver) Open(tarName string, opts ...Options) error {
 	archiveSettings := &ArchiveSettings{
-		FileMode: os.FileMode(DefaultArchiveMode),
+		FileMode: DefaultArchiveMode,
 	}
 
 	for _, opt := range opts {

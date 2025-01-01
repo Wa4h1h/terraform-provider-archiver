@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
-// make sure we conform to Provider
+// make sure we conform to provider.Provider.
 var _ provider.Provider = &ArchiverProvider{}
 
 type ArchiverProvider struct {
