@@ -251,7 +251,7 @@ func (a *archiveResource) Create(ctx context.Context,
 	files := make([]File, 0, len(plan.FileBlocks.Elements()))
 	resp.Diagnostics.Append(plan.FileBlocks.ElementsAs(ctx, &files, false)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Warn(ctx, "failed to files to archive")
+		tflog.Warn(ctx, "failed to add files to archive")
 	}
 
 	a.appendFiles(ctx, archiver, files...)
@@ -259,7 +259,7 @@ func (a *archiveResource) Create(ctx context.Context,
 	dirs := make([]Dir, 0, len(plan.DirBlocks.Elements()))
 	resp.Diagnostics.Append(plan.DirBlocks.ElementsAs(ctx, &dirs, false)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Warn(ctx, "failed to dirs to archive")
+		tflog.Warn(ctx, "failed to add dirs to archive")
 	}
 
 	a.appendDirs(ctx, archiver, dirs...)
@@ -267,7 +267,7 @@ func (a *archiveResource) Create(ctx context.Context,
 	contents := make([]Content, 0, len(plan.ContentBlocks.Elements()))
 	resp.Diagnostics.Append(plan.ContentBlocks.ElementsAs(ctx, &contents, false)...)
 	if resp.Diagnostics.HasError() {
-		tflog.Warn(ctx, "failed to contents to archive")
+		tflog.Warn(ctx, "failed to add contents to archive")
 	}
 
 	a.appendContents(ctx, archiver, contents...)

@@ -23,7 +23,7 @@ var dirTestCases = []struct {
 	{
 		name: "SrcAbsDstRel_CreateArchive",
 		routine: func(t *testing.T) (string, string) {
-			relPath := "../../internal/random"
+			relPath := "../../internal/testdata"
 
 			path, err := filepath.Abs(relPath)
 
@@ -40,7 +40,7 @@ var dirTestCases = []struct {
 		name: "SrcAbsDstAbs_CreateArchive",
 		routine: func(t *testing.T) (string, string) {
 			var err error
-			path := "../../internal/random/"
+			path := "../../internal/testdata/"
 
 			path, err = filepath.Abs(path)
 
@@ -52,7 +52,7 @@ var dirTestCases = []struct {
 	{
 		name: "SrcAbsSymLinkDstRel_CreateArchive",
 		routine: func(t *testing.T) (string, string) {
-			relPath := "../../internal/random"
+			relPath := "../../internal/testdata"
 
 			path, err := filepath.Abs(relPath)
 
@@ -110,7 +110,7 @@ var fileTestCases = []struct {
 	{
 		name: "SrcAbsDstRel_CreateArchive",
 		routine: func(t *testing.T) (string, string) {
-			relPath := "../../internal/random/types.go"
+			relPath := "../../internal/testdata/file.txt"
 
 			path, err := filepath.Abs(relPath)
 
@@ -127,7 +127,7 @@ var fileTestCases = []struct {
 		name: "SrcAbsDstAbs_CreateArchive",
 		routine: func(t *testing.T) (string, string) {
 			var err error
-			path := "../../internal/random/types.go"
+			path := "../../internal/testdata/file.txt"
 
 			path, err = filepath.Abs(path)
 
@@ -139,7 +139,7 @@ var fileTestCases = []struct {
 	{
 		name: "SrcAbsSymLinkDstRel_CreateArchive",
 		routine: func(t *testing.T) (string, string) {
-			relPath := "../../internal/random/types.go"
+			relPath := "../../internal/testdata/file.txt"
 
 			path, err := filepath.Abs(relPath)
 
